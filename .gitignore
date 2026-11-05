@@ -1,0 +1,23 @@
+# The nxnative clone, Python environment, caches, logs and what the build makes
+vendor/
+.venv/
+.cache/
+output/
+__pycache__/
+*.log
+
+# Never commit game files, keys or anything made from them
+*.xci
+*.nsp
+*.nsz
+*.nca
+*.nup
+*.nso
+*.npdm
+*.keys
+*.apk
+*.aab
+*.ipa
+*.keystore
+exefs/
+romfs/

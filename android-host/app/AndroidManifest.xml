@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- NativeActivity APK of the Pokopia host (android-host/app/front_android.c); no Java. Game data is not in the APK: it is read from the phone (android-host/build_android.py makes it).
+     versionCode / versionName: set by android-host/build_apk.sh (the build date). data_extraction_rules: made there too (only the save is backed up). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="io.github.madebymochi.pokopia">
+    <uses-feature android:name="android.hardware.vulkan.version" android:version="0x403000" android:required="true"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <application android:label="Pokopia (native)" android:hasCode="false" android:extractNativeLibs="true" android:appCategory="game" android:isGame="true"
+        android:allowBackup="true" android:dataExtractionRules="@xml/data_extraction_rules">
+        <activity android:name="android.app.NativeActivity" android:exported="true" android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape" android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density">
+            <meta-data android:name="android.app.lib_name" android:value="dmhost"/>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

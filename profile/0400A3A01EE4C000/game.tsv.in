@@ -1,0 +1,36 @@
+# Pokemon Pokopia (Nintendo Switch 2, update v655360, game version 2.0.1). Android bring-up.
+# Koei Tecmo's KTGL, SDK 20.5, NVN2; modules main + subsdk0 + sdk. Started from xFractals/pokopia-native's profile for v327680 (MIT).
+# tools/make_profile.py writes the build row from the dump's own module headers, so this file holds no build IDs.
+
+# ---- Identity ----
+title_id	0400A3A01EE4C000
+program_id	0400A3A01EE4C000
+
+# ---- App ----
+name	Pokemon Pokopia
+ipa	PokemonPokopia.ipa
+app_category	public.app-category.games
+pad_layout	full
+
+# ---- Versions ----
+@BUILD@
+package	v655360
+shader_versions	v655360
+
+# ---- Files ----
+modules	main subsdk0 sdk
+romfs_marker	motor_asset_re/KIDS_PLATFORM_OUNCE/0x38f972af.fdata
+zip_store	.bin:.fdata:.file:.rdb:.webm
+
+# ---- Memory ----
+# From pokopia-native: the game panics below about 7.9 GiB of heap, per its comment. Address space only: what the game really touches on a phone is not measured yet.
+mem_reserve	0x2C0000000
+mem_alias	0x10000000
+mem_stack	0x10000000
+app_pool	0x280000000
+sys_resource	0x0
+mem_used	0x5600000
+
+# ---- Shader split ----
+shader_groups	/motor_asset_re/=motorassetre /movie_asset/=movieasset
+shader_note	Pokemon Pokopia shaders
