@@ -405,7 +405,7 @@ index b7fdb433..929d1828 100644
          with open(os.path.join(pkg, name), 'wb') as f: f.write(b''.join(rr))
      with open(mapout, 'w') as f:
 diff --git a/dm/host/crash.c b/dm/host/crash.c
-index 026e4d77..42a9083f 100644
+index 026e4d77..5155fb02 100644
 --- a/dm/host/crash.c
 +++ b/dm/host/crash.c
 @@ -75,6 +75,8 @@ void crash_off(const char *tag, uint64_t a) {   // Also used by diag.c
@@ -456,7 +456,7 @@ index 026e4d77..42a9083f 100644
      // What the registers point at: the first six words of each readable target (read with vm_read_overwrite, which fails instead of faulting); a word inside a module prints as a module offset, so an object's vtable names its class
 -    for (int i = 0; i < 29; i++) {
 -        uint64_t a = uc->uc_mcontext->__ss.__x[i], w[6]; vm_size_t got = 0;
-+    // Raw memory (this and the 0x100 bytes below sp) only with DM_CRASH_MEM=1: log.txt goes into public bug reports and the memory can hold the player's names or save data (P48.1); registers, module offsets and the backtrace are enough for most crashes
++    // Raw memory (this and the 0x100 bytes below sp) only with DM_CRASH_MEM=1: log.txt goes into public bug reports and the memory can hold the player's names or save data; registers, module offsets and the backtrace are enough for most crashes
 +    int crash_mem = g_crash_mem;
 +    for (int i = 0; crash_mem && i < 29; i++) {
 +        uint64_t a = UC_X(uc, i), w[6]; vm_size_t got = 0;
@@ -498,7 +498,7 @@ index 026e4d77..42a9083f 100644
      struct sigaction sa = {.sa_sigaction = on_crash, .sa_flags = SA_SIGINFO | SA_ONSTACK};
      sigaction(SIGALRM, &sa, 0);
 diff --git a/dm/host/dm.h b/dm/host/dm.h
-index 84b5321f..f8c8d454 100644
+index 84b5321f..a1673efc 100644
 --- a/dm/host/dm.h
 +++ b/dm/host/dm.h
 @@ -27,8 +27,27 @@ static inline int dm_host_thread_join(pthread_t thread, void **result) {
@@ -578,7 +578,7 @@ index 84b5321f..f8c8d454 100644
  // Diagnostic switches: read once from environment variables when main starts (getenv takes the libc global environment lock, and on a hot path it would make all guest threads queue up)
  extern uint64_t g_t0_ns;   // Host start time (now_ns), used for relative times in the log
 -extern struct dm_flags { int thr, svc, fs, dbg, imports, bootprof; } g_flag;
-+// crashmem = DM_CRASH_MEM: crash and hang dumps print raw guest memory (what registers point at, the stack, waited-for objects). Off by default: log.txt goes into public bug reports and that memory can hold the player's names and save data (P43.1 / P48.1)
++// crashmem = DM_CRASH_MEM: crash and hang dumps print raw guest memory (what registers point at, the stack, waited-for objects). Off by default: log.txt goes into public bug reports and that memory can hold the player's names and save data
 +extern struct dm_flags { int thr, svc, fs, dbg, imports, bootprof, crashmem; } g_flag;
  void *objmap_get(const void *guest); void objmap_put(const void *guest, void *host); void *objmap_del(const void *guest);
  void hle_signal_system_event(void *g);   // hle_thread.c: signal a service-layer SystemEvent (any thread)
@@ -1085,14 +1085,14 @@ index 15d4ccc0..d8f0456a 100644
      case 0x1E: guest_clock_read_wait(); regs[0] = 0; regs[1] = guest_ticks(); return 0;   // GetSystemTick
      case 0x27: {  // OutputDebugString(str, len)
 diff --git a/dm/host/hle_swkbd.c b/dm/host/hle_swkbd.c
-index 24ea60b1..bcb56d1b 100644
+index 24ea60b1..9e8a81ed 100644
 --- a/dm/host/hle_swkbd.c
 +++ b/dm/host/hle_swkbd.c
 @@ -60,6 +60,12 @@ int g_swkbd_min_chars = -1;     // ≥0 = this input needs at least that many ch
  int g_swkbd_numeric_max = -1;   // ≥0 = this input is a quantity box, value = upper limit (set by dm_textinput.c, read by the front end input box, set back to -1 after use)
  int (*g_swkbd_unfilter)(void);   // registered by the host (dm_charname_unfilter in hle_charname.c; NULL in unit tests): keyboard requests from the naming panel bypass the game's ASCII typing filter
  typedef int (*swkbd_input_fn)(const char *title, const char *sub, const char *guide, const char *initial, int max_chars, char *out, int out_cap);
-+// What the player types (a name) is private and log.txt goes into public bug reports: log lines carry only its length in characters; the text itself only with DM_LOG_TEXT=1 (P42.1)
++// What the player types (a name) is private and log.txt goes into public bug reports: log lines carry only its length in characters; the text itself only with DM_LOG_TEXT=1
 +static const char *logtxt(const char *s, char *buf, size_t n) {
 +    if (getenv("DM_LOG_TEXT")) return s;
 +    size_t c = 0; for (const char *p = s; *p; p++) c += ((uint8_t)*p & 0xC0) != 0x80;
@@ -1136,7 +1136,7 @@ index 665246e1..53dd632b 100644
  L(strcpy) L(strncpy) L(strcat) L(strncat) L(strchr) L(strrchr) L(strstr) L(strspn) L(strcspn)
  L(strpbrk) L(strcasecmp) L(strncasecmp) L(atoi) L(atof) L(strtol) L(strtoul) L(strtoll) L(strtoull)
 diff --git a/dm/host/hle_thread.c b/dm/host/hle_thread.c
-index e77c9e64..77c665e2 100644
+index e77c9e64..d31feb58 100644
 --- a/dm/host/hle_thread.c
 +++ b/dm/host/hle_thread.c
 @@ -371,18 +371,24 @@ static void on_pause_sig(int sig, siginfo_t *si, void *uc_) {
@@ -1184,7 +1184,7 @@ index e77c9e64..77c665e2 100644
              for (int i = 19; i <= 28; i++) q += snprintf(rl + q, sizeof rl - q, " x%d=%#llx", i, st.__x[i]);
              fprintf(stderr, "%s\n", rl);
 -            for (int i = 19; i <= 20; i++) { uint8_t raw[128]; vm_size_t g = 0; uint64_t a = st.__x[i];
-+            for (int i = 19; g_flag.crashmem && i <= 20; i++) { uint8_t raw[128]; vm_size_t g = 0; uint64_t a = st.__x[i];   // raw memory dumps (here, the stack below and the waited-for objects) only with DM_CRASH_MEM=1: log.txt goes into public bug reports (P43.1)
++            for (int i = 19; g_flag.crashmem && i <= 20; i++) { uint8_t raw[128]; vm_size_t g = 0; uint64_t a = st.__x[i];   // raw memory dumps (here, the stack below and the waited-for objects) only with DM_CRASH_MEM=1: log.txt goes into public bug reports
                  if (a < 0x100000000ull || vm_read_overwrite(mach_task_self(), a, sizeof raw, (vm_address_t)raw, &g) || g != sizeof raw) continue;
                  char hx[420]; int h = 0; for (int k = 0; k < 128; k += 4) h += snprintf(hx + h, sizeof hx - h, "%08x ", *(uint32_t *)(raw + k));
                  uint64_t vt = *(uint64_t *)raw; module_t *vm_ = module_of((void *)vt); char vs[64] = ""; if (vm_) snprintf(vs, sizeof vs, " (first 8 bytes = %s+%#llx)", vm_->name, vt - (uint64_t)vm_->base);
@@ -1215,7 +1215,7 @@ index e77c9e64..77c665e2 100644
                  got += n; }
              if (got >= 16 && atomic_load(&t->svc_regs) == sr) {   // still in that SVC: the words are its stack, not a later frame's
 diff --git a/dm/host/hle_time.c b/dm/host/hle_time.c
-index f88d64b7..43014749 100644
+index f88d64b7..7e409e7a 100644
 --- a/dm/host/hle_time.c
 +++ b/dm/host/hle_time.c
 @@ -15,16 +15,38 @@ static int64_t fixed_time(void) {
@@ -1236,7 +1236,7 @@ index f88d64b7..43014749 100644
 -    int64_t s = (int64_t)(clock_gettime_nsec_np(CLOCK_MONOTONIC) / 1000000000ull);
 -    memcpy(out, &s, 8); memcpy(out + 8, "dmhost-steady-01", 16); return RES_OK;
 +// Steady clock (seconds + a clock source ID, a 16-byte UUID): GetSpanBetween runs as is in sdk: it subtracts only when the source IDs match, and the user clock difference below is the difference of the offsets (user time - steady) when they match.
-+// It must go on across the phone sleeping and rebooting, or the offset moves by the time spent asleep / off and the game reads it as the player setting the clock (P13.1: Linux's CLOCK_MONOTONIC stops in deep sleep, and after a reboot any "since boot"
++// It must go on across the phone sleeping and rebooting, or the offset moves by the time spent asleep / off and the game reads it as the player setting the clock (Linux's CLOCK_MONOTONIC stops in deep sleep, and after a reboot any "since boot"
 +// clock restarts near 0). So steady = wall time taken once at the first call, plus the time elapsed since then on a clock that counts sleep (Android CLOCK_BOOTTIME; Darwin's CLOCK_MONOTONIC counts it): the offset stays DM_CLOCK_OFFSET until the host clock is really set.
 +// One fixed source ID, as before, so spans work across reboots. The ID is "-02" because the value range changed (it is wall seconds now, not seconds since boot): a snapshot a save holds under "-01" would otherwise give a difference of about minus 56 years once
 +#ifdef __ANDROID__
@@ -1283,7 +1283,7 @@ index f88d64b7..43014749 100644
            "time zone rules of the time service; uses the host localtime_r instead", Result, h_time_ToCalendarTime, CalendarTime *ct, CalendarAdditionalInfo *ai, const int64_t *pt) {
      time_t t = *pt; struct tm tm; localtime_r(&t, &tm);
 -    static int once; if (!once++) LOG("ToCalendarTime: first conversion %lld → %04d-%02d-%02d %02d:%02d (time zone %s, offset %ld s)", (long long)t, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_zone ? tm.tm_zone : "?", (long)tm.tm_gmtoff);
-+    static int once; if (!once++) LOG("ToCalendarTime: first conversion %lld → %04d-%02d-%02d %02d:%02d (UTC offset %ld s)", (long long)t, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, (long)tm.tm_gmtoff);   // no time zone name: log.txt goes into public bug reports (P43.1)
++    static int once; if (!once++) LOG("ToCalendarTime: first conversion %lld → %04d-%02d-%02d %02d:%02d (UTC offset %ld s)", (long long)t, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, (long)tm.tm_gmtoff);   // no time zone name: log.txt goes into public bug reports
      if (ct) *ct = (CalendarTime){(int16_t)(tm.tm_year + 1900), (int8_t)(tm.tm_mon + 1), (int8_t)tm.tm_mday, (int8_t)tm.tm_hour, (int8_t)tm.tm_min, (int8_t)tm.tm_sec, 0};
      if (ai) { memset(ai, 0, sizeof *ai); ai->wday = tm.tm_wday; ai->yday = tm.tm_yday; strlcpy(ai->tzname, tm.tm_zone ? tm.tm_zone : "UTC", sizeof ai->tzname);
                ai->dst = tm.tm_isdst > 0; ai->offset = (int32_t)tm.tm_gmtoff; }

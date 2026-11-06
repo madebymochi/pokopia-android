@@ -478,7 +478,7 @@ static halloc ring_alloc(uint64_t n, uint64_t align) {   // submit thread only; 
     g_ring.head = o + n; g_ring.fence[g_ring.cur] = g_fence + 1;
     return (halloc){g_ring.h[g_ring.cur].buf, o, g_ring.h[g_ring.cur].map + o};
 }
-static int g_nc1_blocks;   // constant blocks taken from the static arena by shader_get (P50.1)
+static int g_nc1_blocks;   // constant blocks taken from the static arena by shader_get
 // Nothing here is freed. It grows by 16 MB as shaders load: a fixed 64 MB was GPU memory taken from the start, and when full it ended the run
 static halloc static_alloc(uint64_t n, uint64_t align) {
     pthread_mutex_lock(&g_stmu);
@@ -552,7 +552,7 @@ static VkImageAspectFlags vk_aspect(VkFormat f) {
     return VK_IMAGE_ASPECT_COLOR_BIT;
 }
 static uint32_t vk_texel_bytes(VkFormat f) {   // bytes per texel of the uncompressed formats this file reads back (screenshots / ReadTexels)
-    switch (f) {   // every uncompressed format of fmt_of's table (P57.1); the block formats (BC, ASTC) have no texel size and fall to the default
+    switch (f) {   // every uncompressed format of fmt_of's table; the block formats (BC, ASTC) have no texel size and fall to the default
         case VK_FORMAT_R8_UNORM: case VK_FORMAT_R8_SNORM: case VK_FORMAT_R8_UINT: case VK_FORMAT_R8_SINT: case VK_FORMAT_R8_USCALED: case VK_FORMAT_R8_SSCALED: case VK_FORMAT_S8_UINT: return 1;
         case VK_FORMAT_R8G8_UNORM: case VK_FORMAT_R8G8_SNORM: case VK_FORMAT_R8G8_UINT: case VK_FORMAT_R8G8_SINT: case VK_FORMAT_R8G8_USCALED: case VK_FORMAT_R8G8_SSCALED:
         case VK_FORMAT_R16_SFLOAT: case VK_FORMAT_R16_UNORM: case VK_FORMAT_R16_SNORM: case VK_FORMAT_R16_UINT: case VK_FORMAT_R16_SINT: case VK_FORMAT_R16_USCALED: case VK_FORMAT_R16_SSCALED: case VK_FORMAT_D16_UNORM:
@@ -717,7 +717,7 @@ void mtl_tex_release(tex_t *t) {
 }
 void mtl_tex_cpu_written(const tex_t *t) {
     int note = 0; pthread_mutex_lock(&g_imu); vimg *v = ih_get(t->serial); if (v) { v->cpu_dirty = 1; if (v->gpu_owned && !v->cpuw_noted) { v->cpuw_noted = 1; note = 1; } } pthread_mutex_unlock(&g_imu);
-    if (note) { static int n; if (n++ < 16) LOG("[RED] vk: CPU write into a GPU-written texture %#llx: not uploaded (an upload is skipped for a texture the GPU wrote; the picture keeps the GPU's content)", (unsigned long long)t->serial); }   // P59.1: once per texture, the first 16 textures
+    if (note) { static int n; if (n++ < 16) LOG("[RED] vk: CPU write into a GPU-written texture %#llx: not uploaded (an upload is skipped for a texture the GPU wrote; the picture keeps the GPU's content)", (unsigned long long)t->serial); }   // once per texture, the first 16 textures
 }
 int mtl_tex_gpu_owned(uint64_t serial) { pthread_mutex_lock(&g_imu); vimg *v = ih_get(serial); int r = v && v->gpu_owned; pthread_mutex_unlock(&g_imu); return r; }
 
@@ -1287,7 +1287,7 @@ static vshader *shader_get2(const uint8_t key8[8], int quiet) {
     // split on tabs keeping empty fields
     char *rp = row, *stage = strsep(&rp, "\t"), *set = strsep(&rp, "\t"), *binds = strsep(&rp, "\t"), *io = strsep(&rp, "\t"), *extras = strsep(&rp, "\t");
     s->stage = !stage ? -1 : !strcmp(stage, "vs") ? 0 : !strcmp(stage, "ps") ? 1 : !strcmp(stage, "gs") ? 2 : !strcmp(stage, "hs") ? 3 : !strcmp(stage, "ds") ? 4 : !strcmp(stage, "cs") ? 5 : -1; s->set = set ? atoi(set) : 0;
-    int nbx = 0, nix = 0;   // bindings / vertex inputs past the 40 / 32 the tables hold (P52.1)
+    int nbx = 0, nix = 0;   // bindings / vertex inputs past the 40 / 32 the tables hold
     if (binds) { char *sv2 = NULL; for (char *t = strtok_r(binds, " ", &sv2); t; t = strtok_r(NULL, " ", &sv2)) { if (s->nb >= 40) { nbx++; continue; } char tk[96]; snprintf(tk, sizeof tk, "%s", t); vk_parse_bind(&s->b[s->nb++], tk); } }
     if (io) { char *sv3 = NULL; for (char *t = strtok_r(io, " ", &sv3); t; t = strtok_r(NULL, " ", &sv3))
         if (t[0] == 'i') { if (s->nin >= 32) { nix++; continue; } int loc = atoi(t + 1); char *c = strchr(t, ':'); if (c) { s->in[s->nin].loc = (uint8_t)loc; s->in[s->nin].ct = c[1]; s->in[s->nin].n = (uint8_t)atoi(c + 2); s->nin++; } } }
@@ -1295,10 +1295,10 @@ static vshader *shader_get2(const uint8_t key8[8], int quiet) {
     if (extras) { char *sv4 = NULL; for (char *t = strtok_r(extras, " ", &sv4); t; t = strtok_r(NULL, " ", &sv4))
         if (!strncmp(t, "f1:", 3)) { int bn = atoi(t + 3); for (int i = 0; i < s->nb; i++) if (s->b[i].binding == bn && s->b[i].type == 'c') s->b[i].f1 = 1; } }
     free(row);
-    if (nbx || nix) LOG("[RED] vk: shader %s has %d bindings and %d vertex inputs, over the limit: only the first 40 bindings / 32 inputs are used (the layout may miss resources the shader reads)", k, s->nb + nbx, s->nin + nix);   // P52.1: once per shader (shader_get runs once per shader); the shader is used as before
+    if (nbx || nix) LOG("[RED] vk: shader %s has %d bindings and %d vertex inputs, over the limit: only the first 40 bindings / 32 inputs are used (the layout may miss resources the shader reads)", k, s->nb + nbx, s->nin + nix);   // once per shader (shader_get runs once per shader); the shader is used as before
     uLongf n = pe->spv_raw; void *code = malloc(n ? n : 1);
     if (!code || uncompress(code, &n, spvp, pe->spv_len) != Z_OK || n != pe->spv_raw) { LOG("[RED] vk: shader %s in the shader pack does not decompress: the copy may be damaged, copy it again", k); free(code); free(rec); s->failed = 1; return NULL; }
-    if (n < 20 || (n & 3) || *(const uint32_t *)code != 0x07230203u) { LOG("[RED] vk: shader %s is damaged (%zu bytes, first word %#x)", k, (size_t)n, n >= 4 ? *(const uint32_t *)code : 0u); free(code); free(rec); s->failed = 1; return NULL; }   // P5.1: header is 5 words, magic 0x07230203
+    if (n < 20 || (n & 3) || *(const uint32_t *)code != 0x07230203u) { LOG("[RED] vk: shader %s is damaged (%zu bytes, first word %#x)", k, (size_t)n, n >= 4 ? *(const uint32_t *)code : 0u); free(code); free(rec); s->failed = 1; return NULL; }   // header is 5 words, magic 0x07230203
     {   // writes the layer (OpDecorate / OpMemberDecorate ... BuiltIn Layer): its draws need a layered pass
         const uint32_t *w = code; size_t nw = n / 4;
         for (size_t i = 5; i < nw; ) { uint32_t op = w[i] & 0xffff, wc = w[i] >> 16; if (!wc || i + wc > nw) break;
@@ -1315,7 +1315,7 @@ static vshader *shader_get2(const uint8_t key8[8], int quiet) {
     VkDescriptorSetLayoutCreateInfo li = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, .flags = s->stage == 1 ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR : 0, .bindingCount = (uint32_t)s->nb, .pBindings = lb};
     VKCHK(vkCreateDescriptorSetLayout(g_dev, &li, NULL, &s->dsl));
     for (int i = 0; i < s->nb; i++) if (s->b[i].kind == K_C1) {   // the shader's own constant segment (cbuf slot 1): 64 KB declared, only its own bytes bound (Pokopia keeps thousands of shaders alive)
-        if (!pe->c1_len) { s->c1buf = g_zero_buf; s->c1off = 0; s->c1size = 65536; s->has_c1 = 1; break; }   // no bytes: the zero buffer (first block of the static arena, never written), not a new block each (P50.1)
+        if (!pe->c1_len) { s->c1buf = g_zero_buf; s->c1off = 0; s->c1size = 65536; s->has_c1 = 1; break; }   // no bytes: the zero buffer (first block of the static arena, never written), not a new block each
         s->c1size = (pe->c1_len + 255ull) & ~255ull; halloc h = static_alloc(s->c1size, 256); g_nc1_blocks++; memset(h.p, 0, s->c1size); memcpy(h.p, c1p, pe->c1_len);
         s->c1buf = h.buf; s->c1off = h.off; s->has_c1 = 1; break;
     }
@@ -1860,7 +1860,7 @@ void mtl_sub_begin(void) {
     if (!g_state_inited) { g_state_inited = 1; state_reset(); }
     ctx *c = &g_ctx[g_nsub++ % g_nctx];
     uint64_t w0 = now_ns();
-    if (c->fence) for (int w = 1; !mtl_wait(c->fence, 10000000000ull); w++) LOG("[RED] vk: GPU hang? submission %llu still running after %d s: its command pool and descriptor pools are not reset while it runs, waiting on", (unsigned long long)c->fence, 10 * w);   // P47.1: was one line, then a reset under the running submission
+    if (c->fence) for (int w = 1; !mtl_wait(c->fence, 10000000000ull); w++) LOG("[RED] vk: GPU hang? submission %llu still running after %d s: its command pool and descriptor pools are not reset while it runs, waiting on", (unsigned long long)c->fence, 10 * w);   // was one line, then a reset under the running submission
     WT_ADD(WT_CTX, now_ns() - w0);
     dead_reap(); rc_age();
     g_ups.sub_bytes = g_ups.ring_bytes = g_ups.wait_ns = 0; g_ups.flushes = 0; g_ring.extra = 0; g_ring.sub = 0;
@@ -1913,12 +1913,12 @@ static VkFormat view_format(const vimg *v, const view_t *vw, int has) {
     if (fmt_of(vw->format).conv == CV_BC6 && (v->fmt == VK_FORMAT_E5B9G9R9_UFLOAT_PACK32 || v->fmt == VK_FORMAT_BC1_RGB_SRGB_BLOCK)) return v->fmt;   // a view of the texture's own BC6H format: see bc6_fmt
     VkFormat f = tex_vk_format(vw->format);
     if (f && bc_twin(v->fmt)) return !bc_twin_on() || fmt_is_srgb(f) == fmt_is_srgb(v->fmt) ? v->fmt : bc_twin(v->fmt);   // sRGB or not; BC7 and native BC1-3 alike
-    if (!f || !v->mutable_) { if (f && f != v->fmt) RED_ONCE(51, "vk: view format %d of an image of format %d, which cannot be viewed in another format (depth or compressed): the image's own format is used", (int)f, (int)v->fmt); return v->fmt; }   // P57.1
+    if (!f || !v->mutable_) { if (f && f != v->fmt) RED_ONCE(51, "vk: view format %d of an image of format %d, which cannot be viewed in another format (depth or compressed): the image's own format is used", (int)f, (int)v->fmt); return v->fmt; }
     if (v->fl) {   // an image created with a format list may only be viewed in the formats of the list
         VkFormat fam[8]; int n = fmt_family(v->fmt, fam), in = 0; for (int i = 0; i < n; i++) in |= fam[i] == f;
         if (!in) { RED_ONCE(46, "vk: DM_VK_IMGFLAGS: view format %d of an image of format %d is outside its format list: the image's own format is used (colours may be reinterpreted wrongly)", (int)f, (int)v->fmt); return v->fmt; }
     }
-    if (vk_texel_bytes(f) != vk_texel_bytes(v->fmt)) { RED_ONCE(50, "vk: view format %d (%u bytes a texel) of an image of format %d (%u bytes) differs in texel size: the image's own format is used (colours may be reinterpreted wrongly)", (int)f, vk_texel_bytes(f), (int)v->fmt, vk_texel_bytes(v->fmt)); return v->fmt; }   // P57.1
+    if (vk_texel_bytes(f) != vk_texel_bytes(v->fmt)) { RED_ONCE(50, "vk: view format %d (%u bytes a texel) of an image of format %d (%u bytes) differs in texel size: the image's own format is used (colours may be reinterpreted wrongly)", (int)f, vk_texel_bytes(f), (int)v->fmt, vk_texel_bytes(v->fmt)); return v->fmt; }
     return f;
 }
 // Chunked submission: the game waits for frame N's GPU work before it submits frame N+1, and one submission is replayed whole before the GPU sees any of it, so replay (CPU) and GPU
@@ -2040,7 +2040,7 @@ static void clear_ds(const p_clear_ds *c) {
     if (!rt_begin()) return;
     VkImageAspectFlags a = 0;
     if (c->depth_mask && R.df) a |= VK_IMAGE_ASPECT_DEPTH_BIT;
-    if ((c->stencil_mask & 0xff) && R.sf) { a |= VK_IMAGE_ASPECT_STENCIL_BIT; if ((c->stencil_mask & 0xff) != 0xff) RED_ONCE(52, "vk: stencil clear with mask %#x: cleared whole (vkCmdClearAttachments ignores write masks)", c->stencil_mask); }   // P57.2
+    if ((c->stencil_mask & 0xff) && R.sf) { a |= VK_IMAGE_ASPECT_STENCIL_BIT; if ((c->stencil_mask & 0xff) != 0xff) RED_ONCE(52, "vk: stencil clear with mask %#x: cleared whole (vkCmdClearAttachments ignores write masks)", c->stencil_mask); }
     if (!a) return;
     VkRect2D rc = clip_rect(); if (!rc.extent.width) return;
     VkClearAttachment ca = {a, 0, {.depthStencil = {c->depth, (uint32_t)c->stencil}}};
@@ -2076,7 +2076,7 @@ static VkBlendFactor bfac(int f) {
     }
     return VK_BLEND_FACTOR_ONE;
 }
-static int g_has_dsb;   // the device has dualSrcBlend (dev_init): SRC1 factors are invalid without it (P60.1)
+static int g_has_dsb;   // the device has dualSrcBlend (dev_init): SRC1 factors are invalid without it
 static int g_cs_sub32;  // a compute pipeline can require a subgroup size of 32 (dev_init)
 static VkBlendFactor bfac_d(int f, VkBlendFactor fallback) {   // bfac, with the SRC1 factors replaced by the given one (ONE for a source, ZERO for a destination factor) on a device without dualSrcBlend
     VkBlendFactor v = bfac(f);
@@ -2480,9 +2480,9 @@ static void draw(const p_draw *dw, const p_draw_idx *di) {
     if (prim != 14 && (hs || ds)) { RED_ONCE(74, "vk: primitive %d with a hull or domain shader bound (hull %s domain %s): drawn without them", prim, hs ? hs->key : "-", ds ? ds->key : "-"); hs = ds = NULL; }
     if (prim == 14 && (S.patch < 1 || (uint32_t)S.patch > g_lim.maxTessellationPatchSize)) { RED_ONCE(75, "vk: patch size %d is over this GPU's limit %u: skipped", S.patch, g_lim.maxTessellationPatchSize); drop(5); return; }
     int layer_out = vs->layer_out || (gs && gs->layer_out) || (ds && ds->layer_out);
-    if (S.color.logic_op != NVN_LOGIC_OP_COPY) RED_ONCE(53, "vk: logic op %d is not applied (only COPY is drawn)", (int)S.color.logic_op);   // P60.1
+    if (S.color.logic_op != NVN_LOGIC_OP_COPY) RED_ONCE(53, "vk: logic op %d is not applied (only COPY is drawn)", (int)S.color.logic_op);
     if (S.color.alpha_func != NVN_ALPHA_FUNC_ALWAYS) RED_ONCE(54, "vk: alpha test function %d is not applied (the host has no alpha test)", (int)S.color.alpha_func);
-    if (S.has_vp && !discard && (!(S.vp[0][2] > 0.f) || S.vp[0][3] == 0.f)) { RED_ONCE(55,"vk: draw skipped: viewport %g x %g (Vulkan needs a width above 0 and a height other than 0)", S.vp[0][2], S.vp[0][3]); drop(15); return; }   // P54.3
+    if (S.has_vp && !discard && (!(S.vp[0][2] > 0.f) || S.vp[0][3] == 0.f)) { RED_ONCE(55,"vk: draw skipped: viewport %g x %g (Vulkan needs a width above 0 and a height other than 0)", S.vp[0][2], S.vp[0][3]); drop(15); return; }
     if (R.active && R.layered != layer_out) rp_end();
     g_rp_layered = layer_out; g_rp_empty = discard;
     int ok_rt = rt_begin(); g_rp_layered = g_rp_empty = 0;
@@ -2620,7 +2620,7 @@ static void draw(const p_draw *dw, const p_draw_idx *di) {
     draw_pace();
     if (dw) {
         if (dw->ind) { VkBuffer b; VkDeviceSize off; if (!buf_at(dw->ind, 16, &b, &off)) { drop(7); return; }
-            if (off & 3) { RED_ONCE(57, "vk: indirect draw skipped: argument offset %#llx is not a multiple of 4", (unsigned long long)off); drop(7); return; }   // P54.3
+            if (off & 3) { RED_ONCE(57, "vk: indirect draw skipped: argument offset %#llx is not a multiple of 4", (unsigned long long)off); drop(7); return; }
             if (quads) { RED_ONCE(16, "vk: indirect quads"); drop(8); return; } vkCmdDrawIndirect(cb, b, off, 1, 16); }
         else if (quads) {
             uint32_t nq = (uint32_t)dw->count / 4; if (nq > 65536) { RED_ONCE(17, "vk: more than 65536 quads in one draw"); nq = 65536; }
@@ -2637,7 +2637,7 @@ static void draw(const p_draw *dw, const p_draw_idx *di) {
             uint32_t nq = (uint32_t)di->count / 4;
             int rst = S.restart.on != 0;   // primitive restart: the restart index ends a quad and the next starts after it (nvn_expand_primitive), so every index is read, not nq * 4
             uint64_t nread = rst ? (uint64_t)(uint32_t)di->count : (uint64_t)nq * 4;
-            if (!pool_live(di->ibuf, nread * isz)) { RED_ONCE(58, "vk: indexed quads skipped: %llu indices of %d bytes from %#llx are not inside one memory pool", (unsigned long long)nread, isz, (unsigned long long)di->ibuf); drop(9); return; }   // P54.2: the CPU conversion below reads them all
+            if (!pool_live(di->ibuf, nread * isz)) { RED_ONCE(58, "vk: indexed quads skipped: %llu indices of %d bytes from %#llx are not inside one memory pool", (unsigned long long)nread, isz, (unsigned long long)di->ibuf); drop(9); return; }   // the CPU conversion below reads them all
             halloc h = ring_alloc((uint64_t)nq * 6 * 4 + 4, 4); uint32_t *o = (uint32_t *)h.p; const uint8_t *src = (const uint8_t *)(uintptr_t)di->ibuf;
             uint32_t ni = nq * 6;
             if (rst) ni = nvn_expand_primitive(o, src, (uint32_t)di->count, (unsigned)isz, 7u, 1, S.restart.index);
@@ -2647,10 +2647,10 @@ static void draw(const p_draw *dw, const p_draw_idx *di) {
             if (ni) vkCmdDrawIndexed(cb, ni, inst, 0, di->base_vertex, (uint32_t)di->base_instance);
         } else {
             if (it == VK_INDEX_TYPE_UINT8_EXT && !g_has_u8) { RED_ONCE(19, "vk: 8-bit indices without VK_EXT_index_type_uint8"); drop(10); return; }
-            if (ioff % isz) { RED_ONCE(59, "vk: indexed draw skipped: index buffer offset %#llx is not a multiple of the index size %d", (unsigned long long)ioff, isz); drop(9); return; }   // P54.3 (vkCmdBindIndexBuffer)
+            if (ioff % isz) { RED_ONCE(59, "vk: indexed draw skipped: index buffer offset %#llx is not a multiple of the index size %d", (unsigned long long)ioff, isz); drop(9); return; }   // vkCmdBindIndexBuffer
             vkCmdBindIndexBuffer(cb, ib, ioff, it);
             if (di->ind) { VkBuffer b; VkDeviceSize off; if (!buf_at(di->ind, 20, &b, &off)) { drop(7); return; }
-                if (off & 3) { RED_ONCE(60, "vk: indirect indexed draw skipped: argument offset %#llx is not a multiple of 4", (unsigned long long)off); drop(7); return; }   // P54.3
+                if (off & 3) { RED_ONCE(60, "vk: indirect indexed draw skipped: argument offset %#llx is not a multiple of 4", (unsigned long long)off); drop(7); return; }
                 vkCmdDrawIndexedIndirect(cb, b, off, 1, 20); }
             else vkCmdDrawIndexed(cb, (uint32_t)di->count, inst, 0, di->base_vertex, (uint32_t)di->base_instance);
         }
@@ -2731,7 +2731,7 @@ static void dispatch(const p_dispatch *dp) {
 }
 
 // ---------- Copies ----------
-// P55.4: is the region inside the image's level and layers (3D: its depth at that level)? Compressed formats are measured against the extent rounded up to whole blocks, so no copy that was
+// is the region inside the image's level and layers (3D: its depth at that level)? Compressed formats are measured against the extent rounded up to whole blocks, so no copy that was
 // recorded before this check is refused for a partial block at the edge; 1D arrays (NVN keeps their layer count in the height) are not checked in y
 static int copy_in_image(const vimg *v, unsigned level, unsigned layer0, const NVNcopyRegion *r, int nz, int bw, int bh) {
     if (level >= v->levels || r->xoffset < 0 || r->yoffset < 0 || r->zoffset < 0 || r->width < 0 || r->height < 0 || nz < 0) return 0;
@@ -2762,7 +2762,7 @@ static void copy_b2t(const p_copy_b2t *c) {
         .imageOffset = {c->r.xoffset, c->r.yoffset, is3d ? c->r.zoffset : 0}, .imageExtent = {(uint32_t)c->r.width, (uint32_t)c->r.height, is3d ? (uint32_t)nz : 1}};
     if (v->aspect == (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) { RED_ONCE(23, "vk: buffer→texture copy into depth-stencil: skipped"); return; }
     if (off % 4) { RED_ONCE(24, "vk: buffer→texture copy source offset %#llx is not 4-byte aligned", (unsigned long long)off); return; }
-    if (!copy_in_image(v, level, layer0, &c->r, nz, bw, bh)) { RED_ONCE(68, "vk: buffer→texture copy skipped: region %d,%d,%d %dx%dx%d level %u layer %u is outside the %ux%u level of a %u-level, %u-layer texture", c->r.xoffset, c->r.yoffset, c->r.zoffset, c->r.width, c->r.height, nz, level, layer0, MAX(v->w >> level, 1u), MAX(v->h >> level, 1u), v->levels, v->layers); return; }   // P55.4
+    if (!copy_in_image(v, level, layer0, &c->r, nz, bw, bh)) { RED_ONCE(68, "vk: buffer→texture copy skipped: region %d,%d,%d %dx%dx%d level %u layer %u is outside the %ux%u level of a %u-level, %u-layer texture", c->r.xoffset, c->r.yoffset, c->r.zoffset, c->r.width, c->r.height, nz, level, layer0, MAX(v->w >> level, 1u), MAX(v->h >> level, 1u), v->levels, v->layers); return; }
     PP(PK_COPY); vkCmdCopyBufferToImage(g_cur->cb, b, v->img, VK_IMAGE_LAYOUT_GENERAL, 1, &bic);
     PP(PK_GAP); barrier_all(g_cur->cb);
     v->gpu_owned = 1; v->uploaded = 1;
@@ -2782,7 +2782,7 @@ static void copy_t2b(const p_copy_b2t *c) {
     VkBuffer b; VkDeviceSize off;
     if (!buf_at(c->src, img * nz, &b, &off)) { RED_ONCE(25, "vk: texture→buffer copy destination is in no imported pool"); return; }
     if ((vk_texel_bytes(v->fmt) != (uint32_t)bpb && bw == 1) || fmt_of(c->tex->d.format).conv) { RED_ONCE(26, "vk: texture→buffer copy from a substituted format (NVN %#x): skipped", c->tex->d.format); return; }
-    if (off % 4) { RED_ONCE(69, "vk: texture→buffer copy destination offset %#llx is not 4-byte aligned: skipped", (unsigned long long)off); return; }   // P55.4 (copy_b2t checks it too)
+    if (off % 4) { RED_ONCE(69, "vk: texture→buffer copy destination offset %#llx is not 4-byte aligned: skipped", (unsigned long long)off); return; }   // copy_b2t checks it too
     if (!copy_in_image(v, level, layer0, &c->r, nz, bw, bh)) { RED_ONCE(70, "vk: texture→buffer copy skipped: region %d,%d,%d %dx%dx%d level %u layer %u is outside the %ux%u level of a %u-level, %u-layer texture", c->r.xoffset, c->r.yoffset, c->r.zoffset, c->r.width, c->r.height, nz, level, layer0, MAX(v->w >> level, 1u), MAX(v->h >> level, 1u), v->levels, v->layers); return; }
     VkBufferImageCopy bic = {.bufferOffset = off, .bufferRowLength = (uint32_t)(row / bpb * bw), .bufferImageHeight = (uint32_t)(img / row * bh),
         .imageSubresource = {v->aspect & VK_IMAGE_ASPECT_COLOR_BIT ? VK_IMAGE_ASPECT_COLOR_BIT : VK_IMAGE_ASPECT_DEPTH_BIT, level, is3d ? 0 : layer0 + c->r.zoffset, is3d ? 1 : (uint32_t)nz},
@@ -2803,7 +2803,7 @@ static void copy_t2t(const p_copy_t2t *c) {
     sl -= (unsigned)s->drop; dl -= (unsigned)d->drop;
     int nz = MAX(c->sr.depth, 1);
     VkImageAspectFlags sa = s->aspect, da = d->aspect;
-    {   // P55.4: both regions inside their images (a resolve takes its destination size from the source region)
+    {   // both regions inside their images (a resolve takes its destination size from the source region)
         NVNcopyRegion dr = c->dr; if (c->flags & DM_COPY_RESOLVE) { dr.width = c->sr.width; dr.height = c->sr.height; }
         int sbw = 1, sbh = 1, dbw = 1, dbh = 1; nvn_fmt_bpb(c->src->d.format, &sbw, &sbh); nvn_fmt_bpb(c->dst->d.format, &dbw, &dbh);
         if (!copy_in_image(s, sl, ss, &c->sr, nz, sbw, sbh) || !copy_in_image(d, dl, ds, &dr, nz, dbw, dbh)) {
@@ -2846,7 +2846,7 @@ static void clear_tex(const p_clear_tex *c) {
 }
 void mtl_sub_fill(uint64_t dst, uint64_t n, uint32_t value) {
     VkBuffer b; VkDeviceSize off; if (!buf_at(dst, n, &b, &off)) { RED_ONCE(29, "vk: buffer fill outside imported pools"); return; }
-    if (off & 3) { RED_ONCE(72, "vk: buffer fill skipped: address %#llx is not a multiple of 4 (the fill would land on other bytes)", (unsigned long long)dst); return; }   // P55.4
+    if (off & 3) { RED_ONCE(72, "vk: buffer fill skipped: address %#llx is not a multiple of 4 (the fill would land on other bytes)", (unsigned long long)dst); return; }
     if (n & 3) RED_ONCE(73, "vk: buffer fill of %llu bytes is not a multiple of 4: rounded up (the extra bytes after it are written too)", (unsigned long long)n);
     rp_end(); PP(PK_CLEAR); vkCmdFillBuffer(g_cur->cb, b, off & ~3ull, (n + 3) & ~3ull, value); PP(PK_GAP); barrier_all(g_cur->cb);
 }
@@ -2890,7 +2890,7 @@ static void state_op(uint32_t op, const void *a) {
         case OP_BIND_TEX: case OP_BIND_TEX1: case OP_BIND_SAMP: case OP_BIND_IMG: { p_bind_handles t1; const p_bind_handles *b = op == OP_BIND_TEX1 ? bind_rec(op, a, &t1) : a;   // TEX1: one combined handle (nvnCommandBufferBindTexture), the pool bases added
             int lim = op == OP_BIND_TEX || op == OP_BIND_TEX1 ? NTEX : op == OP_BIND_SAMP ? 128 : 32;
             if (b->stage < 0 || b->stage >= 6 || b->first < 0 || b->n < 0 || b->first + b->n > lim || b->n > 32) { RED_ONCE(32, "vk: handle bind out of range (op %u stage %d first %d n %d)", op, b->stage, b->first, b->n); break; }
-            uint64_t h[32]; memcpy(h, b->h, 8 * (size_t)b->n);   // the record holds n handles, not 32 (RECN): a copy of the whole array read past a record at the end of a command block (P53.1)
+            uint64_t h[32]; memcpy(h, b->h, 8 * (size_t)b->n);   // the record holds n handles, not 32 (RECN): a copy of the whole array read past a record at the end of a command block
             if (b->defer && b->src) for (int i = 0; i < b->n; i++) memcpy(&h[i], (const uint8_t *)(uintptr_t)b->src + 8 * i, 8);   // BindTexturesDeferred: the handles are read at execution time
             uint64_t *dst = op == OP_BIND_TEX || op == OP_BIND_TEX1 ? S.tex[b->stage] : op == OP_BIND_SAMP ? S.samp[b->stage] : S.img[b->stage];
             memcpy(dst + b->first, h, 8 * (size_t)b->n); break; }
@@ -2919,7 +2919,7 @@ void mtl_exec(const uint8_t *p) {
     g_exec_depth++;
     for (;;) {
         op_hdr h; memcpy(&h, p, sizeof h);
-        if (h.op != OP_END && (h.op >= OP_COUNT_ || h.size < 8)) {   // a stale or overwritten command handle: a size of 0 would spin here for ever, a random one walks off into random memory (P53.2)
+        if (h.op != OP_END && (h.op >= OP_COUNT_ || h.size < 8)) {   // a stale or overwritten command handle: a size of 0 would spin here for ever, a random one walks off into random memory
             RED_ONCE(48, "vk: bad command record at %p (op %u, size %u): the rest of this command buffer is not replayed", (const void *)p, h.op, h.size); g_exec_bad = 1; g_exec_depth--; return; }
         const void *a = p + 8;
         g_stat_ops[h.op < OP_COUNT_ ? h.op : OP_COUNT_]++;
@@ -2978,7 +2978,7 @@ void dm_vk_overlay_image(const uint8_t *rgba, int w, int h, float opacity) {   /
     if (!rgba || w <= 0 || h <= 0) g_ov.visible = 0;
     else {
         uint64_t sz = (uint64_t)w * h * 4;
-        if (g_ov.stage.size < sz) {   // P49.1: an earlier present may still be copying from the old buffer: freed through the deferred list, once the next submission (queued after every present made so far) completed
+        if (g_ov.stage.size < sz) {   // an earlier present may still be copying from the old buffer: freed through the deferred list, once the next submission (queued after every present made so far) completed
             if (g_ov.stage.buf) { dead *d = calloc(1, sizeof *d); if (d) { d->buf = g_ov.stage.buf; d->mem = g_ov.stage.mem; dead_add(d); } }
             g_ov.stage = hbuf_new(sz, VK_BUFFER_USAGE_TRANSFER_SRC_BIT); }
         memcpy(g_ov.stage.map, rgba, sz); g_ov.w = (uint32_t)w; g_ov.h = (uint32_t)h; g_ov.dirty = 1; g_ov.visible = 1; g_ov.opacity = opacity;
@@ -3241,7 +3241,7 @@ static uint64_t present_inner(const tex_t *t, const int crop[4]) {
     uint32_t fi = g_frame_i++ % 8;
     if (g_pfence_used[fi]) {
         uint64_t w0 = now_ns(); VkResult fr = vkWaitForFences(g_dev, 1, &g_pfence[fi], VK_TRUE, 2000000000ull); WT_ADD(WT_PFENCE, now_ns() - w0);
-        if (fr == VK_TIMEOUT) {   // P47.1: resetting its fence and command buffer while the GPU still runs them is invalid: this present is dropped instead
+        if (fr == VK_TIMEOUT) {   // resetting its fence and command buffer while the GPU still runs them is invalid: this present is dropped instead
             static int nto; if (nto++ < 8) LOG("[RED] vk: present: frame slot %u's previous present has not finished after 2 s (GPU hang?): this present is skipped (#%d)", fi, nto);
             pthread_mutex_unlock(&g_wmu); return n; }
         vkResetFences(g_dev, 1, &g_pfence[fi]); g_pfence_used[fi] = 0;
@@ -3255,7 +3255,7 @@ static uint64_t present_inner(const tex_t *t, const int crop[4]) {
     if (have_sc) {
         uint64_t w0 = now_ns(); VkResult r = pvkAcquireNextImageKHR(g_dev, g_sc, 1000000000ull, g_acq[fi], VK_NULL_HANDLE, &idx); WT_ADD(WT_ACQUIRE, now_ns() - w0);
         if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_ERROR_SURFACE_LOST_KHR) { g_win_changed = 1; }
-        else if (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR) { acquired = 1; if (idx >= g_nsci) { RED_ONCE(67, "vk: acquired swapchain image %u of %u: present skipped", idx, g_nsci); acquired = 0; } }   // P39.2: g_sci / g_scv hold g_nsci entries
+        else if (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR) { acquired = 1; if (idx >= g_nsci) { RED_ONCE(67, "vk: acquired swapchain image %u of %u: present skipped", idx, g_nsci); acquired = 0; } }   // g_sci / g_scv hold g_nsci entries
         else LOG("[RED] vk: acquire failed: %d", (int)r);
     }
     halloc rb = {0};
@@ -3386,7 +3386,7 @@ void mtl_read_texels(const tex_t *t, unsigned level, unsigned layer0, const NVNc
     VkSubmitInfo2 si = {VK_STRUCTURE_TYPE_SUBMIT_INFO_2, .commandBufferInfoCount = 1, .pCommandBufferInfos = &cbs};
     VKCHK(pvkQueueSubmit2(g_q, 1, &si, fe));
     pthread_mutex_unlock(&g_qmu);
-    if (vkWaitForFences(g_dev, 1, &fe, VK_TRUE, 5000000000ull) == VK_TIMEOUT) {   // P47.1: the GPU may still write the buffer and use the fence and command buffer: they stay alive (a small leak) and the game gets zeros
+    if (vkWaitForFences(g_dev, 1, &fe, VK_TRUE, 5000000000ull) == VK_TIMEOUT) {   // the GPU may still write the buffer and use the fence and command buffer: they stay alive (a small leak) and the game gets zeros
         LOG("[RED] vk: ReadTexels: the GPU copy has not finished after 5 s (GPU hang?): the result is zeros, its fence, command buffer and buffer are left alive");
         pthread_mutex_unlock(&g_wmu); memset(dst, 0, img * nz); return; }
     vkDestroyFence(g_dev, fe, NULL);

@@ -170,7 +170,7 @@ static void paths_init(ANativeActivity *act) {
 }
 
 // ---------- What fills memory: DM_MEMLOG=<ms>, DM_MEM_STOP=<MB> ----------
-// Android's low memory killer ended the first run 6 s in, at 3.9 GB in RAM, after closing 58 other apps. DM_MEMLOG logs this process's memory and page faults at that interval, and where its running threads are.
+// Android's low memory killer ended the first run 6 s in, at 3.9 GB in RAM, after closing other apps. DM_MEMLOG logs this process's memory and page faults at that interval, and where its running threads are.
 // DM_MEM_STOP ends the run once RAM + swap reach that many MB, before the killer starts on the phone's other apps
 typedef struct { uint64_t pc, lr; int tid; } mem_sample;
 static mem_sample g_ms[64];
