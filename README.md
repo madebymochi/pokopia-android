@@ -13,7 +13,7 @@ Pokémon Pokopia (Nintendo Switch 2, version 2.0.1) running natively on Android.
   ```
 - **PC:** 64-bit Windows 10 or 11, 60 GB free, with these on it:
   - [Git for Windows](https://git-scm.com/download/win)
-  - [Python](https://www.python.org/downloads/) 3.12 or newer
+  - [Python](https://www.python.org/downloads/windows/) 3.13, the version this is tested with. 3.12 and 3.14 have every package but are untested. 3.15 has no Windows package for `lz4` yet, so its install fails.
   - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
   - a [JDK](https://adoptium.net/), with `java` and `keytool` on PATH
   - the [Android SDK command-line tools](https://developer.android.com/studio#command-line-tools-only), then:
