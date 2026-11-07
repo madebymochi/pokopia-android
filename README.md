@@ -2,7 +2,8 @@
 
 Pokémon Pokopia (Nintendo Switch 2, version 2.0.1) running natively on Android. Not an emulator: the game's own ARM64 code runs on the phone. Your PC builds the app and the game files from your own dump. This repository has no game files or keys.
 
-**Beta.** Tested on one phone (Galaxy S22, Android 16, 8 GB of RAM): a new game reaches the world and a saved game loads again, at 1080p, about 40 fps while the phone is cool and about 30 fps once it is warm. Long play is not tested yet, and neither are other phones. Expect bugs and back up your save. Offline, single player.
+> [!WARNING]
+> **This is a beta.** Tested on one phone (Galaxy S22, Android 16, 8 GB of RAM): a new game reaches the world and a saved game loads again, at 1080p, about 40 fps while the phone is cool and about 30 fps once it is warm. Long play is not tested yet, and neither are other phones. Expect bugs and back up your save. Offline, single player.
 
 ## You need
 
