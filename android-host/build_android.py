@@ -184,8 +184,43 @@ class Adb:
 def install(adb):
     apk = CACHE / 'android' / 'apk' / 'pokopia.apk'
     if not apk.is_file(): die(f'no {apk}: run the app step')
-    if adb.sh(f'pidof {PACKAGE}'): die('the game is running on the phone: installing would stop it, and what is not saved would be lost. Close it, then run this again')
     adb.run('install', '-r', str(apk))
+
+
+def phone_ready(adb):
+    """Before anything changes on the phone. An answer that cannot be read is a stop, not a 'not running'"""
+    r = adb.run('shell', f'pidof {PACKAGE}; echo done:$?', check=False, capture=True)   # pidof answers 0 (running) or 1 (not): anything else means it could not tell
+    out = (r.stdout or '').split()
+    if r.returncode or out[-1:] not in (['done:0'], ['done:1']): die('could not ask the phone whether the game is running: check the cable and that USB debugging is allowed, then run this again')
+    if len(out) > 1: die('the game is running on the phone: changing it now would stop the game, and what is not saved would be lost. Close it, then run this again')
+
+
+def backup_save(adb):
+    """A dated copy of the save on the computer, checked file by file. The phone keeps only one generation of it"""
+    has = adb.sh(f'S={PHONE_DIR}/save; if [ -L $S ]; then echo other; elif [ -d $S ]; then echo y; elif [ -e $S ]; then echo other; elif ls -d $S 2>&1 | grep -q "No such file"; then echo n; else echo unclear; fi')
+    if has == 'n': say('no save on the phone yet: nothing to back up'); return None
+    if has == 'other': die('the save on the phone is not a normal folder, so it was not backed up: look at it first')
+    if has != 'y': die('could not ask the phone whether it has a save, so it was not backed up: run this again')
+    count = adb.sh(f'cd {PHONE_DIR} && find save -type f > /dev/null 2>&1 && find save -type f | wc -l || echo unreadable')   # a pipe would hide a find that failed, and that would look like an empty save
+    if count == '0': say('the save folder on the phone is empty: nothing to back up'); return None
+    if not count.isdigit(): die('could not count the save files on the phone, so they were not backed up: run this again')
+    dest = CACHE / 'save_backup' / time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
+    work = dest.with_name(dest.name + '.partial')   # renamed only once every file is checked, so a folder without .partial is always a whole copy
+    work.mkdir(parents=True)
+    adb.run('pull', f'{PHONE_DIR}/save', str(work))
+    listed = adb.sh(f'cd {PHONE_DIR} && find save -type f -exec sha256sum {{}} +')
+    want = {l[66:]: l[:64] for l in listed.splitlines() if len(l) > 66 and l[64] == ' ' and l[65] in ' *'}   # the fixed layout: 64 digits, a space, a mode mark, the name
+    if len(want) != int(count): die(f'could not read the save on the phone to check the copy in {work}: nothing was changed. Run this again')
+    wrong = [n for n, digest in want.items() if not (work / n).is_file() or sha256_file(work / n) != digest]
+    if wrong: die(f'{len(wrong)} of {len(want)} save files in {work} do not match the phone: nothing was changed. Run this again')
+    work.rename(dest)
+    say(f'save backed up to {dest}: {len(want)} files, each checked against the phone')
+    return dest
+
+
+def before_phone_changes(adb):
+    phone_ready(adb)
+    backup_save(adb)
 
 
 def open_app_once(adb):
@@ -256,6 +291,7 @@ def main():
     if 'app' in steps: do_app()
     if a.install or a.push:
         adb = Adb()
+        before_phone_changes(adb)
         if a.install: install(adb)
         if a.push: push(adb, romfs)
 

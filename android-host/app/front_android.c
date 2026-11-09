@@ -36,6 +36,7 @@
 #include "dm.h"
 #include "dm_input.h"
 #include "touch_controls.h"
+#include "pad_map.h"
 
 int main(int argc, char **argv);   // the host (dm/host/main.c), here a function of this library
 void dm_vk_set_window(void *w);
@@ -535,7 +536,11 @@ static void haptic_tick(void) {
 static int g_ww, g_wh, g_dpi, g_overlay = 1;
 static float g_opacity = 1;
 static tc_result g_tc;
-static uint64_t g_pad_btn; static int32_t g_plx, g_ply, g_prx, g_pry; static float g_hatx, g_haty, g_lt, g_rt;
+static pm_state g_pad;
+_Static_assert(PM_KEY_BACK == AKEYCODE_BACK && PM_KEY_MENU == AKEYCODE_MENU && PM_KEY_DPAD_UP == AKEYCODE_DPAD_UP && PM_KEY_DPAD_DOWN == AKEYCODE_DPAD_DOWN && PM_KEY_DPAD_LEFT == AKEYCODE_DPAD_LEFT && PM_KEY_DPAD_RIGHT == AKEYCODE_DPAD_RIGHT
+    && PM_KEY_BUTTON_A == AKEYCODE_BUTTON_A && PM_KEY_BUTTON_B == AKEYCODE_BUTTON_B && PM_KEY_BUTTON_X == AKEYCODE_BUTTON_X && PM_KEY_BUTTON_Y == AKEYCODE_BUTTON_Y && PM_KEY_BUTTON_L1 == AKEYCODE_BUTTON_L1 && PM_KEY_BUTTON_R1 == AKEYCODE_BUTTON_R1
+    && PM_KEY_BUTTON_L2 == AKEYCODE_BUTTON_L2 && PM_KEY_BUTTON_R2 == AKEYCODE_BUTTON_R2 && PM_KEY_BUTTON_THUMBL == AKEYCODE_BUTTON_THUMBL && PM_KEY_BUTTON_THUMBR == AKEYCODE_BUTTON_THUMBR && PM_KEY_BUTTON_START == AKEYCODE_BUTTON_START && PM_KEY_BUTTON_SELECT == AKEYCODE_BUTTON_SELECT
+    && PM_SOURCE_KEYBOARD == AINPUT_SOURCE_KEYBOARD && PM_SOURCE_DPAD == AINPUT_SOURCE_DPAD && PM_SOURCE_GAMEPAD == AINPUT_SOURCE_GAMEPAD && PM_SOURCE_JOYSTICK == AINPUT_SOURCE_JOYSTICK, "pad_map.h no longer matches the NDK");
 
 static void overlay_push(void) {   // after the first present (the device exists, the frame rect is known)
     int fr[4]; dm_vk_frame_rect(fr);
@@ -548,17 +553,15 @@ static void overlay_push(void) {   // after the first present (the device exists
     if (tc_render(&p, &w, &h)) { dm_vk_overlay_image(p, w, h, g_opacity); last = now; }
 }
 static void input_publish(void) {
-    int32_t lx = g_plx ? g_plx : g_tc.lx, ly = g_ply ? g_ply : g_tc.ly, rx = g_prx ? g_prx : g_tc.rx, ry = g_pry ? g_pry : g_tc.ry;
-    uint64_t b = g_tc.buttons | g_pad_btn;
-    if (g_hatx < -.5f) b |= DM_BTN_LEFT; if (g_hatx > .5f) b |= DM_BTN_RIGHT; if (g_haty < -.5f) b |= DM_BTN_UP; if (g_haty > .5f) b |= DM_BTN_DOWN;
-    if (g_lt > .5f) b |= DM_BTN_ZL; if (g_rt > .5f) b |= DM_BTN_ZR;
+    uint64_t b; int32_t st[4]; pm_output(&g_pad, &b, st);
+    b |= g_tc.buttons;
+    int32_t lx = st[0] ? st[0] : g_tc.lx, ly = st[1] ? st[1] : g_tc.ly, rx = st[2] ? st[2] : g_tc.rx, ry = st[3] ? st[3] : g_tc.ry;
     static int log = -1; if (log < 0) { const char *e = getenv("DM_INPUT_LOG"); log = e && atoi(e); }   // diagnostic: every state change
     static uint64_t pb; static int32_t p[4];
     if (log && (b != pb || lx != p[0] || ly != p[1] || rx != p[2] || ry != p[3])) LOG("front: pad buttons %#llx left %d,%d right %d,%d", (unsigned long long)b, lx, ly, rx, ry);
     pb = b; p[0] = lx; p[1] = ly; p[2] = rx; p[3] = ry;
     dm_pad_set(b, lx, ly, rx, ry);
 }
-static int32_t axis(float v) { if (fabsf(v) < .12f) return 0; v = v < -1 ? -1 : v > 1 ? 1 : v; return (int32_t)(v * DM_STICK_MAX); }
 static void pad_used(void) {
     if (!g_overlay) return;
     g_overlay = 0; dm_vk_overlay_image(NULL, 0, 0, 0);
@@ -587,28 +590,17 @@ static int32_t on_input(struct android_app *app, AInputEvent *e) {
         return 1;
     }
     if (type == AINPUT_EVENT_TYPE_MOTION && (src & AINPUT_SOURCE_JOYSTICK) == AINPUT_SOURCE_JOYSTICK) {
-        g_plx = axis(AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_X, 0)); g_ply = axis(-AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_Y, 0));
-        g_prx = axis(AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_Z, 0)); g_pry = axis(-AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_RZ, 0));
-        g_hatx = AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_HAT_X, 0); g_haty = AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_HAT_Y, 0);
-        g_lt = fmaxf(AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_LTRIGGER, 0), AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_BRAKE, 0));
-        g_rt = fmaxf(AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_RTRIGGER, 0), AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_GAS, 0));
-        pad_used(); input_publish(); return 1;
+#define AX(n) AMotionEvent_getAxisValue(e, AMOTION_EVENT_AXIS_##n, 0)
+        pm_axes a = {.x = AX(X), .y = AX(Y), .z = AX(Z), .rz = AX(RZ), .hat_x = AX(HAT_X), .hat_y = AX(HAT_Y), .ltrigger = AX(LTRIGGER), .rtrigger = AX(RTRIGGER), .brake = AX(BRAKE), .gas = AX(GAS)};
+#undef AX
+        if (pm_motion(&g_pad, AInputEvent_getDeviceId(e), &a, (AMotionEvent_getAction(e) & AMOTION_EVENT_ACTION_MASK) == AMOTION_EVENT_ACTION_CANCEL) == PM_USED) pad_used();
+        input_publish(); return 1;
     }
-    if (type == AINPUT_EVENT_TYPE_KEY && (src & (AINPUT_SOURCE_GAMEPAD | AINPUT_SOURCE_DPAD | AINPUT_SOURCE_JOYSTICK))) {
-        uint64_t b = 0;
-        switch (AKeyEvent_getKeyCode(e)) {   // by position, as on a Switch: the bottom face button (Android A) is B
-            case AKEYCODE_BUTTON_A: b = DM_BTN_B; break; case AKEYCODE_BUTTON_B: b = DM_BTN_A; break;
-            case AKEYCODE_BUTTON_X: b = DM_BTN_Y; break; case AKEYCODE_BUTTON_Y: b = DM_BTN_X; break;
-            case AKEYCODE_BUTTON_L1: b = DM_BTN_L; break; case AKEYCODE_BUTTON_R1: b = DM_BTN_R; break;
-            case AKEYCODE_BUTTON_L2: b = DM_BTN_ZL; break; case AKEYCODE_BUTTON_R2: b = DM_BTN_ZR; break;
-            case AKEYCODE_BUTTON_THUMBL: b = DM_BTN_LS; break; case AKEYCODE_BUTTON_THUMBR: b = DM_BTN_RS; break;
-            case AKEYCODE_BUTTON_START: b = DM_BTN_PLUS; break; case AKEYCODE_BUTTON_SELECT: b = DM_BTN_MINUS; break;
-            case AKEYCODE_DPAD_UP: b = DM_BTN_UP; break; case AKEYCODE_DPAD_DOWN: b = DM_BTN_DOWN; break;
-            case AKEYCODE_DPAD_LEFT: b = DM_BTN_LEFT; break; case AKEYCODE_DPAD_RIGHT: b = DM_BTN_RIGHT; break;
-            default: return 0;
-        }
-        if (AKeyEvent_getAction(e) == AKEY_EVENT_ACTION_DOWN) g_pad_btn |= b; else if (AKeyEvent_getAction(e) == AKEY_EVENT_ACTION_UP) g_pad_btn &= ~b;
-        pad_used(); input_publish(); return 1;
+    if (type == AINPUT_EVENT_TYPE_KEY) {
+        int a = AKeyEvent_getAction(e), r = pm_key(&g_pad, AInputEvent_getDeviceId(e), src, AKeyEvent_getKeyCode(e), a == AKEY_EVENT_ACTION_DOWN && !AKeyEvent_getRepeatCount(e) ? PM_DOWN : a == AKEY_EVENT_ACTION_UP ? PM_UP : PM_OTHER);
+        if (r == PM_IGNORED) return 0;
+        if (r == PM_USED) pad_used();
+        input_publish(); return 1;
     }
     return 0;
 }
@@ -636,8 +628,33 @@ static void save_wait(const char *why) {
 // Focus lost (notification shade, call screen, Recents): Android cancels held keys, but a stick's return to centre goes to the window that has focus now, so a held stick, hat
 // or trigger would stay held on coming back (nxnative's iOS app resigns active the same way, DmGamepad.m). The pad stays shown; its touches are cancelled
 static void input_release(void) {
-    g_pad_btn = 0; g_plx = g_ply = g_prx = g_pry = 0; g_hatx = g_haty = g_lt = g_rt = 0;
+    pm_release(&g_pad);
     tc_pointer none; tc_event(TC_CANCEL, 0, &none, 0, &g_tc); dm_touch_set(NULL, 0); input_publish();
+}
+// A controller that is switched off or unplugged may never report letting go, so what it held would stay held. While something is held, ask Android twice a second whether the controller still exists.
+// Touches are left alone. On android_main's thread, which stays attached until _exit
+static void pad_watch(ANativeActivity *a) {
+    static JNIEnv *env; static jclass cls; static jmethodID get; static int off; static uint64_t next;
+    if (off || !pm_held(&g_pad)) return;
+    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); uint64_t now = (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+    if (now < next) return;
+    next = now + 500;
+    if (!env) {
+        JNIEnv *e; off = 1;   // for good if any of this fails: the game plays on as before
+        if ((*a->vm)->AttachCurrentThread(a->vm, &e, NULL)) return;
+        jclass c = (*e)->FindClass(e, "android/view/InputDevice");
+        if (jfail(e, "FindClass InputDevice") || !c) return;
+        get = (*e)->GetStaticMethodID(e, c, "getDevice", "(I)Landroid/view/InputDevice;");
+        if (jfail(e, "GetStaticMethodID getDevice") || !get) return;
+        cls = (*e)->NewGlobalRef(e, c); (*e)->DeleteLocalRef(e, c);
+        if (!cls) return;
+        env = e; off = 0;
+    }
+    jobject d = (*env)->CallStaticObjectMethod(env, cls, get, (jint)g_pad.device);
+    if (jfail(env, "InputDevice.getDevice")) { off = 1; return; }
+    if (d) { (*env)->DeleteLocalRef(env, d); return; }
+    LOG("front: the controller went away: its buttons and sticks are released");
+    pm_release(&g_pad); input_publish();
 }
 // Tell Android the game is paced at the present rate (DM_PRESENT_HZ, 60): on a 120 Hz panel it can then run the display at 60 (or a multiple) instead of guessing, and each paced
 // frame stops waiting for the next 8.3 ms vblank. COMPATIBILITY_DEFAULT is the NDK's value for games (FIXED_SOURCE is for video). API 30, minSdk is 31. Not done for a 30
@@ -698,7 +715,9 @@ void android_main(struct android_app *app) {
         while (ALooper_pollOnce(g_bg ? -1 : 17, NULL, &events, (void **)&src) >= 0) {   // the timeout: the pad's first layer waits for the first present, and a layer held back by overlay_push's rate limit; in the background there is nothing to draw: wait for an event
             if (src) src->process(app, src);
             if (app->destroyRequested) { LOG("front: destroy requested: exiting"); save_wait("destroy"); _exit(0); }
+            pad_watch(app->activity);   // here too: a steady stream of touches never reaches the timeout below
         }
+        pad_watch(app->activity);
         overlay_push();
     }
 }

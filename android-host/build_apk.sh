@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pack .cache/android/libdmhost.so (android-host/build.sh all) into a signed NativeActivity APK: aapt2 link -> add the library -> zipalign -> apksigner.
-# Usage: android-host/build_apk.sh [--install]   Output: .cache/android/apk/pokopia.apk. The APK holds no game data, keys or shaders (all read from the phone).
+# Usage: android-host/build_apk.sh   Output: .cache/android/apk/pokopia.apk. The APK holds no game data, keys or shaders (all read from the phone). To install it: build_android.py --install, which checks the phone first.
 # The signing key is KEYSTORE (android-host/build_android.py sets it, outside the checkout), made once with keytool
 # when missing; an APK signed with another key cannot update the installed app. JDK from PATH (java / keytool).
 # Env (build_android.py sets them): ANDROID_SDK, NDK, BUILD_TOOLS, ANDROID_JAR (default: what SDK_PACKAGES in build_android.py names), KEYSTORE,
@@ -42,4 +42,3 @@ java -Xmx1024M -Xss1m -jar "$(w "$BT/lib/apksigner.jar")" sign --ks "$(w "$KS")"
 [ "$OUT/pokopia.apk" -nt "$OUT/aligned.apk" ] || { echo "apksigner did not write a new pokopia.apk" >&2; exit 1; }
 rm -f "$KS"
 echo "APK: $OUT/pokopia.apk ($(du -h "$OUT/pokopia.apk" | cut -f1))"
-if [ "${1:-}" = --install ]; then MSYS_NO_PATHCONV=1 "$SDK/platform-tools/adb.exe" install -r "$(w "$OUT/pokopia.apk")"; fi
